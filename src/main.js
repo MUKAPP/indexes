@@ -1,6 +1,4 @@
 import {
-    getLatestCommit,
-    getRecentCommits,
     getLatestReleaseInfo,
     getRepoInfo,
     createPullRequestForNewRepo,
@@ -20,27 +18,34 @@ const forceResend = FORCE_RESEND === 'true' || FORCE_RESEND === '1';
 async function processRepo(repo, oldData) {
     console.log(`Processing ${repo.owner}/${repo.repo}...`);
 
-    const latestCommit = await getLatestCommit(repo.owner, repo.repo, repo.default_branch);
-    if (!latestCommit) {
-        console.log(`  Failed to get latest commit for ${repo.owner}/${repo.repo}`);
-        return null;
-    }
-
-    const hasUpdates = !oldData || oldData.commit_id !== latestCommit.sha;
-    if (!forceResend && !hasUpdates) {
-        console.log(`  No updates for ${repo.owner}/${repo.repo}`);
-        return { ...oldData, owner: repo.owner, repo: repo.repo };
-    }
-
-    console.log(forceResend ? `  Force resending...` : `  Updates detected...`);
-
-    const recentCommits = await getRecentCommits(repo.owner, repo.repo, repo.default_branch);
     const releaseInfo = await getLatestReleaseInfo(repo.owner, repo.repo);
+    if (!releaseInfo || !releaseInfo.tagName) {
+        console.log(`  No release found for ${repo.owner}/${repo.repo}`);
+        return {
+            ...oldData,
+            owner: repo.owner,
+            repo: repo.repo,
+            message_id: oldData?.message_id || 0,
+            release_tag: oldData?.release_tag || "",
+        };
+    }
+
+    const hasUpdates = !oldData || oldData.release_tag !== releaseInfo.tagName;
+    if (!forceResend && !hasUpdates) {
+        console.log(`  No release updates for ${repo.owner}/${repo.repo}`);
+        return {
+            ...oldData,
+            owner: repo.owner,
+            repo: repo.repo,
+            release_tag: releaseInfo.tagName,
+        };
+    }
+
+    console.log(forceResend ? `  Force resending...` : `  Release update detected...`);
 
     const newMessageId = await syncRepoMessage(oldData?.message_id, {
         ...repo,
         releaseInfo,
-        recentCommits,
     });
 
     if (newMessageId) {
@@ -49,11 +54,17 @@ async function processRepo(repo, oldData) {
             owner: repo.owner,
             repo: repo.repo,
             message_id: newMessageId,
-            commit_id: latestCommit.sha,
+            release_tag: releaseInfo.tagName,
         };
     }
 
-    return null;
+    return {
+        ...oldData,
+        owner: repo.owner,
+        repo: repo.repo,
+        message_id: oldData?.message_id || 0,
+        release_tag: oldData?.release_tag || "",
+    };
 }
 
 /**

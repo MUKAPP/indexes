@@ -65,7 +65,7 @@ export async function createPullRequestForNewRepo(newOwner, newRepo) {
 
     const branchName = `indexing/${newOwner}/${newRepo}`;
     const filePath = `repos/${newOwner}/${newRepo}.json`;
-    const emptyState = JSON.stringify({ message_id: 0, commit_id: "" }, null, 2);
+    const emptyState = JSON.stringify({ message_id: 0, release_tag: "" }, null, 2);
 
     try {
         console.log(`Creating/Updating PR for external repository: ${newOwner}/${newRepo}...`);
@@ -179,62 +179,6 @@ export async function createPullRequestForNewRepo(newOwner, newRepo) {
     }
 }
 
-/**
- * 获取仓库的最新提交
- * @param {string} owner - 仓库所有者
- * @param {string} repo - 仓库名称
- * @param {string} branch - 分支名称
- * @returns {Promise<{sha: string, message: string} | null>}
- */
-export async function getLatestCommit(owner, repo, branch = "main") {
-    try {
-        const { data } = await octokit.rest.repos.listCommits({
-            owner,
-            repo,
-            sha: branch,
-            per_page: 1,
-        });
-
-        if (data.length === 0) {
-            return null;
-        }
-
-        return {
-            sha: data[0].sha,
-            message: data[0].commit.message,
-        };
-    } catch (error) {
-        console.error(`Error fetching latest commit for ${owner}/${repo}:`, error.message);
-        return null;
-    }
-}
-
-/**
- * 获取仓库的最近六条提交
- * @param {string} owner - 仓库所有者
- * @param {string} repo - 仓库名称
- * @param {string} branch - 分支名称
- * @returns {Promise<Array<{sha: string, message: string, date: string}>>}
- */
-export async function getRecentCommits(owner, repo, branch = "main") {
-    try {
-        const { data } = await octokit.rest.repos.listCommits({
-            owner,
-            repo,
-            sha: branch,
-            per_page: 6,
-        });
-
-        return data.map((commit) => ({
-            sha: commit.sha,
-            message: commit.commit.message.split("\n")[0],
-            date: commit.commit.author.date,
-        }));
-    } catch (error) {
-        console.error(`Error fetching recent commits for ${owner}/${repo}:`, error.message);
-        return [];
-    }
-}
 
 /**
  * 获取仓库的最新 release 信息及文件列表
