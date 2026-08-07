@@ -22,7 +22,7 @@ async function addRepo() {
 
     await saveRepoData(MANUAL_OWNER, MANUAL_REPO, {
         message_id: 0,
-        commit_id: "",
+        release_tag: "",
     });
 
     console.log(`Successfully added ${MANUAL_OWNER}/${MANUAL_REPO} to tracking`);

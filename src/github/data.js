@@ -97,7 +97,7 @@ export async function getAllTrackedRepos() {
 
 /**
  * 将全部仓库数据转存到 data 分支，并在该分支上创建唯一新提交 (Single-commit storage)
- * @param {Array<{owner: string, repo: string, message_id: number, commit_id: string}>} allUpdates - 所有的最新数据
+ * @param {Array<{owner: string, repo: string, message_id: number, release_tag: string}>} allUpdates - 所有的最新数据
  */
 export async function batchSaveRepoData(allUpdates) {
     if (allUpdates.length === 0) return;
@@ -122,7 +122,7 @@ export async function batchSaveRepoData(allUpdates) {
 
             const content = JSON.stringify({
                 message_id: update.message_id,
-                commit_id: update.commit_id,
+                release_tag: update.release_tag || "",
             }, null, 2);
 
             await fs.mkdir(dirPath, { recursive: true });
@@ -173,7 +173,7 @@ export async function saveRepoData(repoOwner, repoName, newData) {
         owner: repoOwner,
         repo: repoName,
         message_id: newData.message_id || 0,
-        commit_id: newData.commit_id || ""
+        release_tag: newData.release_tag || ""
     });
 
     await batchSaveRepoData(allUpdates);

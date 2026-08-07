@@ -20,8 +20,18 @@ export const bot = new Bot(TG_BOT_TOKEN);
  * @returns {string} - 转义后的文本
  */
 function escapeMarkdown(text) {
-    const specialChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-    return text.replace(new RegExp(`([${specialChars.join('\\')}])`, 'g'), '\\$1');
+    return text.replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, '\\$1');
+}
+
+/**
+ * 截断 MarkdownV2 消息，避免超过 Telegram 的消息长度限制
+ */
+function truncateMarkdown(text, maxLength) {
+    if (text.length <= maxLength) return text;
+
+    let truncated = text.slice(0, maxLength - 3);
+    if (truncated.endsWith("\\")) truncated = truncated.slice(0, -1);
+    return `${truncated}…`;
 }
 
 /**
@@ -103,7 +113,7 @@ function formatDate(isoString, onlyDate = false) {
  * @returns {string} - 格式化后的 MarkdownV2 文本
  */
 export function formatRepoMessage(context) {
-    const { owner, repo, description, releaseInfo, recentCommits = [] } = context;
+    const { owner, repo, description, releaseInfo } = context;
     let messageText = "";
 
     const repoPath = `${owner}/${repo}`;
@@ -111,28 +121,20 @@ export function formatRepoMessage(context) {
     const starsStr = context.stars ? ` ★${context.stars}` : "";
     messageText += `__*\\# [${escapeMarkdown(repoPath)}](${repoUrl})*__ ${escapeMarkdown(starsStr)}\n`;
 
-    if (releaseInfo && releaseInfo.assets && releaseInfo.assets.length > 0) {
+    if (releaseInfo) {
         const dateStr = formatDate(releaseInfo.publishedAt, true);
         const versionStr = releaseInfo.tagName ? ` ${releaseInfo.tagName}` : "";
         const fullInfo = versionStr + (dateStr ? ` ${dateStr}` : "");
         const superscriptInfo = fullInfo ? toSuperscript(fullInfo) : "";
-        messageText += `  _${superscriptInfo}_\n`;
+        if (superscriptInfo) messageText += `  _${escapeMarkdown(superscriptInfo)}_\n`;
     }
 
     if (description && description.trim()) {
         messageText += `   ${escapeMarkdown(description)}\n`;
     }
 
-    if (recentCommits.length === 0) {
-        messageText += ">暂无提交记录";
-    } else {
-        recentCommits.forEach((commit, index) => {
-            const commitMsg = (commit.message || "无描述").trim();
-            if (index !== 0) messageText += `\n`;
-            messageText += `>• _${escapeMarkdown(commitMsg)}_`;
-        });
-        messageText += `||\n`;
-    }
+    const releaseMessage = releaseInfo?.body?.trim() || "暂无 Release 说明";
+    messageText += `\n${escapeMarkdown(releaseMessage)}`;
 
     return messageText;
 }
@@ -170,7 +172,7 @@ export async function syncRepoMessage(oldMessageId, context) {
         await deleteMessage(oldMessageId);
     }
 
-    const messageText = formatRepoMessage(context);
+    const messageText = truncateMarkdown(formatRepoMessage(context), 4096);
     if (!messageText.trim()) {
         console.error(`Message text is empty for ${owner}/${repo}`);
         return null;
@@ -190,7 +192,7 @@ export async function syncRepoMessage(oldMessageId, context) {
         let sentMessageId = null;
 
         // 特殊处理：如果有 release 文件，我们将使用 sendMediaGroup
-        if (releaseInfo && releaseInfo.assets && releaseInfo.assets.length > 0) {
+        if (releaseInfo && releaseInfo.assets && releaseInfo.assets.length > 0 && messageText.length <= 1024) {
             const mediaGroup = [];
 
             for (let i = 0; i < releaseInfo.assets.length; i++) {
@@ -243,7 +245,7 @@ export async function syncRepoMessage(oldMessageId, context) {
                 sentMessageId = message_id;
             }
         } else {
-            // 普通文本发送（没有发布新版本文件的话）
+            // 普通文本发送（没有附件，或附件字幕超过 Telegram 限制）
             const { message_id } = await bot.api.sendMessage(TG_GROUP_ID, messageText, otherParams);
             sentMessageId = message_id;
         }
